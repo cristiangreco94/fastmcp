@@ -679,6 +679,7 @@ wheels = [
 
 [[package]]
 name = "fastmcp"
+version = "3.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },

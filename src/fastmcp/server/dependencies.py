@@ -825,6 +825,28 @@ class _CurrentContext(Dependency):  # type: ignore[misc]
             "Check `context.request_context` for None before accessing."
         )
 
+    async def _restore_task_access_token(self, session_id: str, task_id: str) -> None:
+        """Restore the access token snapshot from Redis into a ContextVar.
+
+        Called when creating a task-aware Context in a Docket worker. The token
+        was stored at submit_to_docket() time. If the token has expired, it is
+        not restored (get_access_token() will return None).
+        """
+        docket = _current_docket.get()
+        if docket is None:
+            return
+
+        token_key = docket.key(f"fastmcp:task:{session_id}:{task_id}:access_token")
+        try:
+            async with docket.redis() as redis:
+                token_data = await redis.get(token_key)
+            if token_data is not None:
+                restored = AccessToken.model_validate_json(token_data)
+                self._access_token_cv_token = _task_access_token.set(restored)
+        except Exception:
+            # Don't let token restoration failures break task execution
+            pass
+
     async def __aexit__(self, *args: object) -> None:
         # Clean up access token ContextVar
         if self._access_token_cv_token is not None:
